@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>💬 Voices Across America – Hope Edition</title>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: #000;
+    }
+    header {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      text-align: center;
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+    }
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 5vw, 1.6rem);
+      color: #fff;
+      font-weight: 600;
+    }
+    header p {
+      margin: 0.3rem auto 0;
+      font-size: clamp(0.8rem, 3vw, 0.9rem);
+      color: #ccc;
+      max-width: 90%;
+    }
+    #narration {
+      position: fixed;
+      bottom: 10%;
+      width: 100%;
+      text-align: center;
+      font-size: clamp(1rem, 4vw, 1.2rem);
+      color: #ffe4b5;
+      opacity: 0;
+      transition: opacity 2s ease-in-out;
+      font-style: italic;
+      z-index: 9999;
+      padding: 0 10px;
+      box-sizing: border-box;
+    }
+    .controls {
+      position: fixed;
+      top: 15%;
+      right: 10px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .controls button {
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      border: 1px solid #ffaa00;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: clamp(0.8rem, 3vw, 0.9rem);
+      min-width: 60px;
+      min-height: 40px;
+      touch-action: manipulation;
+    }
+    .controls button:hover {
+      background: rgba(255, 170, 0, 0.2);
+    }
+    @keyframes ripple {
+      0% { transform: scale(0.3); opacity: 0.8; }
+      80% { transform: scale(4); opacity: 0.1; }
+      100% { transform: scale(4.5); opacity: 0; }
+    }
+    .ripple {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: radial-gradient(circle, rgba(255,223,150,0.8) 0%, rgba(255,223,150,0.1) 70%, transparent 100%);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: ripple 4s ease-out;
+      z-index: 10;
+    }
+    .city-dot {
+      width: 12px;
+      height: 12px;
+      background: radial-gradient(circle, #aee8ff 0%, #88e0ff 50%, rgba(255,255,255,0) 80%);
+      border-radius: 50%;
+      box-shadow: 0 0 15px rgba(180,220,255,0.9);
+      opacity: 0.9;
+      cursor: pointer;
+      animation: pulse 2s infinite ease-in-out;
+      touch-action: manipulation;
+    }
+    .city-dot.minneapolis {
+      background: radial-gradient(circle, rgba(128,0,128,0.8) 0%, rgba(128,0,128,0.4) 50%, rgba(128,0,128,0) 80%);
+      box-shadow: 0 0 20px rgba(128,0,128,0.9);
+    }
+    .leaflet-popup-content-wrapper {
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      font-size: clamp(0.8rem, 3vw, 0.9rem);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      max-width: 90vw;
+      box-sizing: border-box;
+    }
+    .leaflet-popup-content {
+      margin: 10px;
+      line-height: 1.4;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+    @media (max-width: 600px) {
+      header {
+        padding: 0.8rem;
+      }
+      #map {
+        height: calc(100% - 80px);
+        top: 80px;
+      }
+      .controls {
+        top: 90px;
+        right: 5px;
+      }
+      #narration {
+        bottom: 15%;
+        font-size: clamp(0.9rem, 4vw, 1.1rem);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>💬 Voices Across America – Hope Edition</h1>
+    <p>Every city’s light tells a story of hope, from Minneapolis’s purple glow in Prince’s 1980s music revolution to modern hubs like NYC and Austin. Tap glowing dots and urban areas for shifting tales of community and change.</p>
+  </header>
+  <div id="map"></div>
+  <div id="narration">A spark of hope ignites...</div>
+  <div class="controls">
+    <button id="toggleAnimation">Pause</button>
+  </div>
+  <script>
+    const map = L.map('map', {
+      center: [39.5, -98.35],
+      zoom: 4,
+      zoomControl: true,
+      attributionControl: true,
+      maxBounds: [[-90, -180], [90, 180]],
+      maxBoundsViscosity: 1.0
+    });
+
+    // Dark CartoDB tiles
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+      opacity: 0.7
+    }).addTo(map);
+
+    // Ensure map renders correctly
+    setTimeout(() => map.invalidateSize(), 100);
+
+    const cities = [
+      { name: "Los Angeles", coords: [34.0522, -118.2437], message1: "A voice for change echoes in the West.", message2: "A voice for change echoes in the West.", urbanInfo: "LA’s 3.8M residents drive cultural shifts through film and activism.", weight: 3 },
+      { name: "San Francisco", coords: [37.7749, -122.4194], message1: "Innovation meets compassion.", message2: "Innovation meets compassion.", urbanInfo: "San Francisco’s tech hub fosters community solutions for 880K.", weight: 2 },
+      { name: "Seattle", coords: [47.6062, -122.3321], message1: "Empathy grows like rain.", message2: "Rain and reflection — empathy grows.", urbanInfo: "Seattle’s 700K+ blend tech innovation with social good.", weight: 2 },
+      { name: "Denver", coords: [39.7392, -104.9903], message1: "Hope rises over the Rockies.", message2: "Hope rises over the Rockies.", urbanInfo: "Denver’s 700K residents build resilience through community.", weight: 2 },
+      { name: "Dallas", coords: [32.7767, -96.7970], message1: "Every voice matters — every heart counts.", message2: "Every voice matters — every heart counts.", urbanInfo: "Dallas’s 1.3M unite for progress and inclusivity.", weight: 2 },
+      { name: "Minneapolis", coords: [44.9778, -93.2650], message1: "From still waters, action flows.", message2: "Prince’s 1980s beats inspire unity.", urbanInfo: "Minneapolis’s 430K rocked with Prince’s music, sparking cultural and social change.", weight: 2 },
+      { name: "Chicago", coords: [41.8781, -87.6298], message1: "The heartland beats with courage.", message2: "The heartland beats with courage.", urbanInfo: "Chicago’s 2.7M drive Midwest hope through grit and community.", weight: 3 },
+      { name: "Atlanta", coords: [33.7490, -84.3880], message1: "The spirit of unity endures.", message2: "The spirit of unity endures.", urbanInfo: "Atlanta’s 500K+ lead Southern renewal through culture.", weight: 2 },
+      { name: "Miami", coords: [25.7617, -80.1918], message1: "Waves carry stories of resilience.", message2: "Waves carry stories of resilience.", urbanInfo: "Miami’s diverse 400K+ spark vibrant community change.", weight: 2 },
+      { name: "New York City", coords: [40.7128, -74.0060], message1: "Where millions of voices become one.", message2: "Where millions of voices become one.", urbanInfo: "NYC’s 8M+ amplify hope through diversity and action.", weight: 3 },
+      { name: "Boston", coords: [42.3601, -71.0589], message1: "Ideas spark, and hearts open.", message2: "Ideas spark, and hearts open.", urbanInfo: "Boston’s 600K+ fuel hope with innovation and empathy.", weight: 2 },
+      { name: "Washington, D.C.", coords: [38.9072, -77.0369], message1: "A light for justice flickers brighter.", message2: "A light for justice flickers brighter.", urbanInfo: "D.C.’s 700K push for equity and systemic change.", weight: 2 },
+      { name: "Phoenix", coords: [33.4484, -112.0740], message1: "The desert blooms with empathy.", message2: "The desert blooms with empathy.", urbanInfo: "Phoenix’s 1.6M residents foster hope in the Sunbelt.", weight: 2 },
+      { name: "Portland", coords: [45.5152, -122.6784], message1: "Kindness flows with the river.", message2: "Kindness flows with the river.", urbanInfo: "Portland’s 650K+ nurture community through creativity.", weight: 2 }
+    ];
+
+    const dotLayer = L.layerGroup().addTo(map);
+    const urbanLayer = L.layerGroup().addTo(map);
+    let isAnimating = true;
+    let useMessage1 = true;
+
+    cities.forEach(city => {
+      // City dot
+      const divIcon = L.divIcon({
+        className: `city-dot ${city.name === 'Minneapolis' ? 'minneapolis' : ''}`,
+        iconSize: [12, 12],
+        iconAnchor: [6, 6],
+        popupAnchor: [0, -6]
+      });
+      const marker = L.marker(city.coords, { icon: divIcon })
+        .addTo(dotLayer)
+        .bindPopup(`<strong>${city.name}</strong><br>${city.message1}`);
+      marker.on('click', () => rippleAt(city));
+
+      // Urban circle
+      const circleRadius = 100000 * (city.weight || 1);
+      const urbanCircle = L.circle(city.coords, {
+        radius: circleRadius,
+        color: 'rgba(255, 180, 0, 0)',
+        fillColor: city.name === 'Minneapolis' ? '#800080' : '#ffcc00',
+        fillOpacity: city.weight > 2 ? 0.3 : 0.2,
+        weight: 0
+      })
+        .addTo(urbanLayer)
+        .bindPopup(`<strong>${city.name} Urban Area</strong><br>${city.urbanInfo}`);
+    });
+
+    // Ripple animation
+    function rippleAt(city) {
+      const point = map.latLngToContainerPoint(city.coords);
+      const ripple = document.createElement('div');
+      ripple.className = 'ripple';
+      ripple.style.left = `${point.x - 10}px`;
+      ripple.style.top = `${point.y - 10}px`;
+      document.getElementById('map').appendChild(ripple);
+      setTimeout(() => ripple.remove(), 4000);
+    }
+
+    // Random ripple animation
+    function animateRipples() {
+      if (!isAnimating) return;
+      const city = cities[Math.floor(Math.random() * cities.length)];
+      rippleAt(city);
+      setTimeout(animateRipples, 1200 + Math.random() * 2000);
+    }
+    animateRipples();
+
+    // Narration
+    const lines = [
+      "A spark of hope ignites...",
+      "Empathy ripples from desert to river...",
+      "From Minneapolis’s music to NYC’s hustle...",
+      "Every voice builds a brighter future.",
+      "Together, we rise in unity."
+    ];
+    let i = 0;
+    function cycleNarration() {
+      if (!isAnimating) return;
+      const el = document.getElementById('narration');
+      el.style.opacity = 0;
+      setTimeout(() => {
+        el.textContent = lines[i];
+        el.style.opacity = 1;
+        i = (i + 1) % lines.length;
+      }, 2000);
+    }
+
+    // Alternate messages
+    function alternateMessages() {
+      if (!isAnimating) return;
+      useMessage1 = !useMessage1;
+      dotLayer.eachLayer(marker => {
+        const city = cities.find(c => c.coords[0] === marker.getLatLng().lat && c.coords[1] === marker.getLatLng().lng);
+        marker.setPopupContent(`<strong>${city.name}</strong><br>${useMessage1 ? city.message1 : city.message2}`);
+      });
+    }
+
+    // Synchronize narration and message alternation
+    function cycleAnimations() {
+      cycleNarration();
+      alternateMessages();
+    }
+    setInterval(cycleAnimations, 7000);
+
+    // Toggle animation
+    const toggleButton = document.getElementById('toggleAnimation');
+    toggleButton.addEventListener('click', () => {
+      isAnimating = !isAnimating;
+      toggleButton.textContent = isAnimating ? 'Pause' : 'Play';
+      if (isAnimating) {
+        animateRipples();
+        cycleAnimations();
+      }
+    });
+
+    // Adjust map on resize
+    window.addEventListener('resize', () => map.invalidateSize());
+  </script>
+</body>
+</html>
